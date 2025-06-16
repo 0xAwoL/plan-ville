@@ -1,11 +1,6 @@
-requests>=2.31.0
-numpy>=1.24.0
+streamlit>=1.35.0
+pandas>=2.0.0
 python-dotenv>=1.0.0
-asyncio>=3.4.3
-sqlite3>=2.6.0
-typing>=3.7.4
-json>=2.0.9
-os>=0.1.4
-datetime>=4.7
-math>=1.0.0
-time>=1.0.0
+folium>=0.14.0
+streamlit-folium>=0.15.0
+

@@ -11,12 +11,14 @@ Before starting the search, the system calculates and displays based on this:
 ## Setup
 1. provide you google api project key into .env
 2. create venv `python -m venv venv`
-3. `source venv/bin/activate`
+3. `source venv/bin/activate` on linux/      '.\venv\Scripts\activate' on windows
 4. `pip install -r requirements.txt`
 5. `python main.py`
 
 
 
 
+for the ui run:
 
 
+streamlit run runui.py

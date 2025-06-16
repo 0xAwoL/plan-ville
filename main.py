@@ -10,6 +10,7 @@ import numpy as np
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from checkpoint import CheckpointManager
+import json
 
 load_dotenv()
 
@@ -39,8 +40,8 @@ class FindBusiness:
             raise ValueError("GOOGLE_API_KEY environment variable is not set")
         
         self.db = db.Database()
-        self.search_radius = 100  
-        self.grid_spacing = 200  
+        self.search_radius = 500  # Zwiększony promień wyszukiwania
+        self.grid_spacing = 400   # Zwiększony odstęp między punktami
         self.rate_limiter = RateLimiter(300)
         self.checkpoint_manager = CheckpointManager()
         
@@ -58,32 +59,41 @@ class FindBusiness:
         
         return grid_points
 
-    async def request_business_data(self, location: str, radius: int, page_token: str = None) -> Dict[str, Any]:
+    async def request_business_data(self, latitude: float, longitude: float, radius: int, page_token: str = None) -> Dict[str, Any]:
         await self.rate_limiter.acquire()
         
         base_url = "https://places.googleapis.com/v1/places:searchNearby"
-        params = {
-            "location": location,
-            "radius": radius,
-            "key": self.api_key,
-            "fields": "displayName,location,primaryType,rating"
+        data = {
+            "locationRestriction": {
+                "circle": {
+                    "center": {
+                        "latitude": latitude,
+                        "longitude": longitude
+                    },
+                    "radius": float(radius)
+                }
+            },
+            "maxResultCount": 20
         }
-        
         if page_token:
-            params["pageToken"] = page_token
-            
+            data["pageToken"] = page_token
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.api_key,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.primaryType,places.rating,places.userRatingCount,places.formattedAddress,places.websiteUri,places.internationalPhoneNumber"
+        }
         try:
-            response = requests.get(base_url, params=params)
+            response = requests.post(base_url, json=data, headers=headers)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
             print(f"Error making API request: {e}")
+            print(f"Treść odpowiedzi: {getattr(e.response, 'text', '')}")
             return None
 
     def process_business_data(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not data or "places" not in data:
             return []
-            
         processed_businesses = []
         for place in data["places"]:
             business = {
@@ -94,10 +104,12 @@ class FindBusiness:
                 "longitude": place.get("location", {}).get("longitude"),
                 "type": place.get("primaryType"),
                 "rating": place.get("rating"),
-                "user_ratings_total": place.get("userRatingCount")
+                "user_ratings_total": place.get("userRatingCount"),
+                "website": place.get("websiteUri"),
+                "phone": place.get("internationalPhoneNumber"),
+                "email": None  # Email field is not available in the API
             }
             processed_businesses.append(business)
-            
         return processed_businesses
 
     async def search_location(self, latitude: float, longitude: float):
@@ -111,12 +123,11 @@ class FindBusiness:
             self.checkpoint_manager.mark_point_processed(point)
             return
             
-        location = f"{latitude},{longitude}"
         page_token = None
         
         try:
             while True:
-                data = await self.request_business_data(location, self.search_radius, page_token)
+                data = await self.request_business_data(latitude, longitude, self.search_radius, page_token)
                 if not data:
                     break
                     
@@ -188,10 +199,10 @@ class FindBusiness:
         }
 
 if __name__ == "__main__":
-    # New York City coordinates 
-    CITY_LAT = 40.7831
-    CITY_LNG = -73.9712
-    CITY_RADIUS_KM = 5
+    # Warsaw - city center
+    CITY_LAT = 52.2297
+    CITY_LNG = 21.0122
+    CITY_RADIUS_KM = 0.5  # 0.5km radius
     
     finder = FindBusiness()
     grid_info = finder.calculate_grid_info(CITY_LAT, CITY_LNG, CITY_RADIUS_KM)
